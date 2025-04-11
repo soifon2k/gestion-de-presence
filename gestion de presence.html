@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Système de Gestion de Présence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #5D5CDE;
+            --text-light: #333333;
+            --text-dark: #f0f0f0;
+            --bg-light: #FFFFFF;
+            --bg-dark: #181818;
+            --secondary-light: #f0f0f0;
+            --secondary-dark: #333333;
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            .app-container {
+                background-color: var(--bg-dark);
+                color: var(--text-dark);
+            }
+            .card {
+                background-color: var(--secondary-dark);
+                color: var(--text-dark);
+            }
+            .input-field {
+                background-color: #2d2d2d;
+                color: var(--text-dark);
+                border-color: #444;
+            }
+            .btn-secondary {
+                background-color: #444;
+                color: var(--text-dark);
+            }
+            .data-row:nth-child(even) {
+                background-color: #222;
+            }
+            .chart-container {
+                background-color: #222;
+            }
+            .tab-button {
+                background-color: #333;
+                color: var(--text-dark);
+            }
+            .tab-button.active {
+                background-color: var(--primary-color);
+            }
+        }
+        
+        @media (prefers-color-scheme: light) {
+            .app-container {
+                background-color: var(--bg-light);
+                color: var(--text-light);
+            }
+            .card {
+                background-color: var(--secondary-light);
+                color: var(--text-light);
+            }
+            .input-field {
+                background-color: white;
+                color: var(--text-light);
+                border-color: #ddd;
+            }
+            .btn-secondary {
+                background-color: #e0e0e0;
+                color: var(--text-light);
+            }
+            .data-row:nth-child(even) {
+                background-color: #f5f5f5;
+            }
+            .chart-container {
+                background-color: #f5f5f5;
+            }
+            .tab-button {
+                background-color: #e0e0e0;
+                color: var(--text-light);
+            }
+            .tab-button.active {
+                background-color: var(--primary-color);
+                color: white;
+            }
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .loading-indicator {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="app-container min-h-screen">
+    <header class="border-b border-gray-200 dark:border-gray-700 py-4 px-4 md:px-6 flex justify-between items-center">
+        <h1 class="text-xl md:text-2xl font-bold">Système de Gestion de Présence</h1>
+        <div class="flex items-center">
+            <button id="toggle-view-btn" class="btn-primary rounded-md px-3 py-2 text-sm md:text-base">
+                Mode Admin
+            </button>
+        </div>
+    </header>
+
+    <div id="login-screen" class="flex flex-col items-center justify-center min-h-[80vh] p-4">
+        <div class="card rounded-lg shadow-lg p-6 w-full max-w-md fade-in">
+            <h2 class="text-xl font-bold mb-4 text-center">Connexion</h2>
+            <div class="mb-4">
+                <label class="block mb-2">Identifiant</label>
+                <input type="text" id="login-id" class="input-field rounded-md p-3 w-full border text-base" placeholder="Votre identifiant">
+            </div>
+            <div class="mb-6">
+                <label class="block mb-2">Mot de passe</label>
+                <input type="password" id="login-password" class="input-field rounded-md p-3 w-full border text-base" placeholder="Votre mot de passe">
+            </div>
+            <button id="login-btn" class="btn-primary rounded-md p-3 w-full font-medium">
+                Se connecter
+            </button>
+        </div>
+    </div>
+
+    <main id="main-content" class="p-4 md:p-6 hidden">
+        <!-- Employee View -->
+        <div id="employee-view" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="card rounded-lg shadow-lg p-4 fade-in">
+                    <h2 class="text-lg font-bold mb-4">Mon Badge</h2>
+                    <div class="flex flex-col items-center mb-4">
+                        <div id="employee-qrcode" class="mb-4 bg-white p-2 rounded"></div>
+                        <div id="employee-barcode-container" class="mb-4 bg-white p-2 rounded">
+                            <svg id="employee-barcode"></svg>
+                        </div>
+                        <p class="mb-2 text-center"><span id="employee-id" class="font-bold"></span></p>
+                    </div>
+                </div>
+                
+                <div class="card rounded-lg shadow-lg p-4 fade-in">
+                    <h2 class="text-lg font-bold mb-4">Pointage</h2>
+                    <div class="flex justify-center mb-4">
+                        <button id="check-in-btn" class="btn-primary rounded-md px-6 py-3 mr-2">
+                            Arrivée
+                        </button>
+                        <button id="check-out-btn" class="btn-primary rounded-md px-6 py-3">
+                            Départ
+                        </button>
+                    </div>
+                    <div id="last-check" class="text-center mt-4"></div>
+                </div>
+                
+                <div class="card rounded-lg shadow-lg p-4 fade-in md:col-span-2">
+                    <h2 class="text-lg font-bold mb-4">Mes Présences</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto">
+                            <thead>
+                                <tr class="border-b dark:border-gray-700">
+                                    <th class="px-4 py-2 text-left">Date</th>
+                                    <th class="px-4 py-2 text-left">Arrivée</th>
+                                    <th class="px-4 py-2 text-left">Départ</th>
+                                    <th class="px-4 py-2 text-left">Durée</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employee-attendance-table">
+                                <!-- Employee attendance data will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin View -->
+        <div id="admin-view" class="hidden">
+            <div class="mb-6">
+                <div class="flex mb-4 space-x-2 overflow-x-auto pb-2">
+                    <button class="tab-button active px-4 py-2 rounded-t-md" data-tab="tab-overview">Vue d'ensemble</button>
+                    <button class="tab-button px-4 py-2 rounded-t-md" data-tab="tab-employees">Employés</button>
+                    <button class="tab-button px-4 py-2 rounded-t-md" data-tab="tab-scanner">Scanner</button>
+                    <button class="tab-button px-4 py-2 rounded-t-md" data-tab="tab-stats">Statistiques</button>
+                </div>
+                
+                <!-- Overview Tab -->
+                <div id="tab-overview" class="tab-content active card rounded-lg shadow-lg p-4 fade-in">
+                    <h2 class="text-lg font-bold mb-4">Présences Aujourd'hui</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-green-100 dark:bg-green-900 rounded-lg p-4 text-center">
+                            <h3 class="text-lg font-bold text-green-800 dark:text-green-200">Présents</h3>
+                            <p id="present-count" class="text-3xl font-bold text-green-600 dark:text-green-300">0</p>
+                        </div>
+                        <div class="bg-red-100 dark:bg-red-900 rounded-lg p-4 text-center">
+                            <h3 class="text-lg font-bold text-red-800 dark:text-red-200">Absents</h3>
+                            <p id="absent-count" class="text-3xl font-bold text-red-600 dark:text-red-300">0</p>
+                        </div>
+                        <div class="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 text-center">
+                            <h3 class="text-lg font-bold text-blue-800 dark:text-blue-200">Taux de présence</h3>
+                            <p id="attendance-rate" class="text-3xl font-bold text-blue-600 dark:text-blue-300">0%</p>
+                        </div>
+                    </div>
+                    
+                    <h3 class="text-md font-bold mb-3">Activité récente</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto">
+                            <thead>
+                                <tr class="border-b dark:border-gray-700">
+                                    <th class="px-4 py-2 text-left">Employé</th>
+                                    <th class="px-4 py-2 text-left">Action</th>
+                                    <th class="px-4 py-2 text-left">Heure</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-activity-table">
+                                <!-- Recent activity will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Employees Tab -->
+                <div id="tab-employees" class="tab-content card rounded-lg shadow-lg p-4 fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-bold">Gestion des Employés</h2>
+                        <button id="add-employee-btn" class="btn-primary rounded-md px-4 py-2 text-sm">
+                            Ajouter Employé
+                        </button>
+                    </div>
+                    
+                    <div id="add-employee-form" class="mb-6 hidden p-4 border rounded-lg">
+                        <h3 class="text-md font-bold mb-3">Nouvel Employé</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block mb-2">Identifiant</label>
+                                <input type="text" id="new-employee-id" class="input-field rounded-md p-2 w-full border text-base" placeholder="ID unique">
+                            </div>
+                            <div>
+                                <label class="block mb-2">Nom</label>
+                                <input type="text" id="new-employee-name" class="input-field rounded-md p-2 w-full border text-base" placeholder="Nom complet">
+                            </div>
+                            <div>
+                                <label class="block mb-2">Service</label>
+                                <input type="text" id="new-employee-department" class="input-field rounded-md p-2 w-full border text-base" placeholder="Service/Département">
+                            </div>
+                            <div>
+                                <label class="block mb-2">Mot de passe</label>
+                                <input type="password" id="new-employee-password" class="input-field rounded-md p-2 w-full border text-base" placeholder="Mot de passe">
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button id="cancel-add-employee" class="btn-secondary rounded-md px-4 py-2 mr-2">
+                                Annuler
+                            </button>
+                            <button id="save-employee-btn" class="btn-primary rounded-md px-4 py-2">
+                                Enregistrer
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full table-auto">
+                            <thead>
+                                <tr class="border-b dark:border-gray-700">
+                                    <th class="px-4 py-2 text-left">ID</th>
+                                    <th class="px-4 py-2 text-left">Nom</th>
+                                    <th class="px-4 py-2 text-left">Service</th>
+                                    <th class="px-4 py-2 text-left">Statut</th>
+                                    <th class="px-4 py-2 text-left">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employees-table">
+                                <!-- Employees data will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Scanner Tab -->
+                <div id="tab-scanner" class="tab-content card rounded-lg shadow-lg p-4 fade-in">
+                    <h2 class="text-lg font-bold mb-4">Scanner de Présence</h2>
+                    
+                    <div class="flex justify-center mb-4">
+                        <div class="flex space-x-2">
+                            <button id="start-scan-btn" class="btn-primary rounded-md px-4 py-2">
+                                Démarrer Scanner
+                            </button>
+                            <button id="stop-scan-btn" class="btn-secondary rounded-md px-4 py-2 hidden">
+                                Arrêter Scanner
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="scanner-container" class="mb-4 max-w-md mx-auto">
+                        <div id="qr-reader" class="w-full"></div>
+                    </div>
+                    
+                    <div id="scan-result" class="p-3 rounded-md hidden">
+                        <!-- Scan results will appear here -->
+                    </div>
+                    
+                    <div id="manual-entry" class="mt-6 border-t pt-4">
+                        <h3 class="text-md font-bold mb-3">Saisie manuelle</h3>
+                        <div class="flex flex-wrap items-end gap-2">
+                            <div class="flex-grow min-w-[200px]">
+                                <label class="block mb-2">ID Employé</label>
+                                <input type="text" id="manual-employee-id" class="input-field rounded-md p-2 w-full border text-base" placeholder="ID de l'employé">
+                            </div>
+                            <div>
+                                <button id="manual-check-in-btn" class="btn-primary rounded-md px-4 py-2">
+                                    Arrivée
+                                </button>
+                            </div>
+                            <div>
+                                <button id="manual-check-out-btn" class="btn-primary rounded-md px-4 py-2">
+                                    Départ
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Stats Tab -->
+                <div id="tab-stats" class="tab-content card rounded-lg shadow-lg p-4 fade-in">
+                    <h2 class="text-lg font-bold mb-4">Statistiques de Présence</h2>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+                        <div class="chart-container p-4 rounded-lg">
+                            <h3 class="text-md font-bold mb-3">Taux de présence par jour</h3>
+                            <canvas id="attendance-chart"></canvas>
+                        </div>
+                        
+                        <div class="chart-container p-4 rounded-lg">
+                            <h3 class="text-md font-bold mb-3">Présence par service</h3>
+                            <canvas id="department-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-container p-4 rounded-lg">
+                        <h3 class="text-md font-bold mb-3">Heures de travail moyennes</h3>
+                        <canvas id="hours-chart"></canvas>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-md font-bold">Exporter les données</h3>
+                            <div class="flex items-center space-x-2">
+                                <label for="export-month" class="mr-2">Période :</label>
+                                <select id="export-month" class="input-field rounded-md p-2 border text-base">
+                                    <option value="current">Mois en cours</option>
+                                    <option value="previous">Mois précédent</option>
+                                    <option value="custom">Personnalisé</option>
+                                </select>
+                                <button id="export-btn" class="btn-primary rounded-md px-4 py-2">
+                                    Exporter
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Pour exporter, utilisez clic-droit → "Enregistrer sous" sur les graphiques.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div id="modal-content" class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 mx-4">
+            <div class="flex justify-between items-start mb-4">
+                <h3 id="modal-title" class="text-lg font-bold">Titre Modal</h3>
+                <button id="modal-close" class="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-100">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-body">
+                <!-- Modal content will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data storage
+        const STORAGE_KEY = 'attendance_system_data';
+        
+        // Default data
+        const defaultData = {
+            employees: [
+                { id: 'EMP001', name: 'Jean Dupont', department: 'Ressources Humaines', password: 'emp001', isAdmin: false },
+                { id: 'EMP002', name: 'Marie Martin', department: 'Marketing', password: 'emp002', isAdmin: false },
+                { id: 'EMP003', name: 'Lucas Bernard', department: 'Technique', password: 'emp003', isAdmin: false },
+                { id: 'ADMIN', name: 'Administrateur', department: 'Direction', password: 'admin', isAdmin: true }
+            ],
+            attendance: [],
+            recentActivity: []
+        };
+        
+        // Get data from localStorage or use default
+        let appData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultData;
+        
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+        }
+        
+        // Current user state
+        let currentUser = null;
+        let isAdminView = false;
+        
+        // DOM Elements
+        const loginScreen = document.getElementById('login-screen');
+        const mainContent = document.getElementById('main-content');
+        const employeeView = document.getElementById('employee-view');
+        const adminView = document.getElementById('admin-view');
+        const toggleViewBtn = document.getElementById('toggle-view-btn');
+        
+        // Modal elements
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const modalContent = document.getElementById('modal-content');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const modalClose = document.getElementById('modal-close');
+        
+        // QR and Barcode scanner
+        let html5QrCode = null;
+        
+        // Charts
+        let attendanceChart = null;
+        let departmentChart = null;
+        let hoursChart = null;
+        
+        // Initialize app
+        function init() {
+            // Set up event listeners
+            setupEventListeners();
+            
+            // Check if there is login info stored in session
+            const sessionUser = sessionStorage.getItem('currentUser');
+            if (sessionUser) {
+                currentUser = JSON.parse(sessionUser);
+                showMainScreen();
+            }
+        }
+        
+        // Set up event listeners
+        function setupEventListeners() {
+            // Login button
+            document.getElementById('login-btn').addEventListener('click', handleLogin);
+            
+            // Toggle view button
+            toggleViewBtn.addEventListener('click', toggleView);
+            
+            // Employee view buttons
+            document.getElementById('check-in-btn').addEventListener('click', () => handleCheckInOut('in'));
+            document.getElementById('check-out-btn').addEventListener('click', () => handleCheckInOut('out'));
+            
+            // Admin view - Tab navigation
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const tabId = e.target.dataset.tab;
+                    switchTab(tabId);
+                });
+            });
+            
+            // Admin view - Employee management
+            document.getElementById('add-employee-btn').addEventListener('click', showAddEmployeeForm);
+            document.getElementById('cancel-add-employee').addEventListener('click', hideAddEmployeeForm);
+            document.getElementById('save-employee-btn').addEventListener('click', saveNewEmployee);
+            
+            // Admin view - Scanner
+            document.getElementById('start-scan-btn').addEventListener('click', startQRScanner);
+            document.getElementById('stop-scan-btn').addEventListener('click', stopQRScanner);
+            document.getElementById('manual-check-in-btn').addEventListener('click', () => manualCheckInOut('in'));
+            document.getElementById('manual-check-out-btn').addEventListener('click', () => manualCheckInOut('out'));
+            
+            // Admin view - Export
+            document.getElementById('export-btn').addEventListener('click', exportData);
+            
+            // Modal
+            modalClose.addEventListener('click', closeModal);
+        }
+        
+        // Handle login
+        function handleLogin() {
+            const id = document.getElementById('login-id').value;
+            const password = document.getElementById('login-password').value;
+            
+            const employee = appData.employees.find(emp => emp.id === id && emp.password === password);
+            
+            if (employee) {
+                currentUser = employee;
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                showMainScreen();
+            } else {
+                alert('Identifiants incorrects. Veuillez réessayer.');
+            }
+        }
+        
+        // Show main screen after login
+        function showMainScreen() {
+            loginScreen.classList.add('hidden');
+            mainContent.classList.remove('hidden');
+            
+            // Set correct view based on user role
+            isAdminView = currentUser.isAdmin;
+            updateViewState();
+            
+            if (isAdminView) {
+                // Initialize admin view
+                updateEmployeeTable();
+                updateRecentActivity();
+                updateStatistics();
+                renderCharts();
+            } else {
+                // Initialize employee view
+                updateEmployeeProfile();
+                updateEmployeeAttendanceTable();
+            }
+        }
+        
+        // Toggle between admin and employee views
+        function toggleView() {
+            if (!currentUser.isAdmin) {
+                showModal('Accès refusé', '<p>Vous n\'avez pas les droits d\'administrateur.</p>');
+                return;
+            }
+            
+            isAdminView = !isAdminView;
+            updateViewState();
+        }
+        
+        // Update view state based on current mode
+        function updateViewState() {
+            if (isAdminView) {
+                employeeView.classList.add('hidden');
+                adminView.classList.remove('hidden');
+                toggleViewBtn.textContent = 'Mode Employé';
+                
+                // Update admin view data
+                updateEmployeeTable();
+                updateRecentActivity();
+                updateStatistics();
+            } else {
+                adminView.classList.add('hidden');
+                employeeView.classList.remove('hidden');
+                toggleViewBtn.textContent = 'Mode Admin';
+                
+                // Update employee view data
+                updateEmployeeProfile();
+                updateEmployeeAttendanceTable();
+            }
+        }
+        
+        // Switch tabs in admin view
+        function switchTab(tabId) {
+            // Deactivate all tabs
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Activate selected tab
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // Special handling for specific tabs
+            if (tabId === 'tab-stats') {
+                renderCharts();
+            }
+        }
+        
+        // Update employee profile in employee view
+        function updateEmployeeProfile() {
+            document.getElementById('employee-id').textContent = currentUser.id;
+            
+            // Generate QR code
+            const qrContainer = document.getElementById('employee-qrcode');
+            qrContainer.innerHTML = '';
+            QRCode.toCanvas(qrContainer, currentUser.id, { width: 200 }, function (error) {
+                if (error) console.error(error);
+            });
+            
+            // Generate barcode
+            JsBarcode('#employee-barcode', currentUser.id, {
+                format: 'CODE128',
+                lineColor: '#000',
+                width: 2,
+                height: 50,
+                displayValue: true
+            });
+            
+            // Show last check status
+            updateLastCheckStatus();
+        }
+        
+        // Update last check status
+        function updateLastCheckStatus() {
+            const lastCheckElement = document.getElementById('last-check');
+            const today = new Date().toISOString().split('T')[0];
+            
+            const todayAttendance = appData.attendance.find(a => 
+                a.employeeId === currentUser.id && a.date === today
+            );
+            
+            if (todayAttendance) {
+                let status = '';
+                if (todayAttendance.checkIn) {
+                    status += `<div class="text-green-600 dark:text-green-400">Arrivée: ${todayAttendance.checkIn}</div>`;
+                }
+                if (todayAttendance.checkOut) {
+                    status += `<div class="text-red-600 dark:text-red-400">Départ: ${todayAttendance.checkOut}</div>`;
+                }
+                lastCheckElement.innerHTML = status;
+            } else {
+                lastCheckElement.innerHTML = '<div class="text-gray-500">Aucun pointage aujourd\'hui</div>';
+            }
+        }
+        
+        // Update employee attendance table
+        function updateEmployeeAttendanceTable() {
+            const tableBody = document.getElementById('employee-attendance-table');
+            tableBody.innerHTML = '';
+            
+            const employeeAttendance = appData.attendance
+                .filter(a => a.employeeId === currentUser.id)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            if (employeeAttendance.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="4" class="px-4 py-2 text-center">Aucune donnée de présence</td>`;
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            employeeAttendance.forEach(record => {
+                const row = document.createElement('tr');
+                row.className = 'data-row border-b dark:border-gray-700';
+                
+                let duration = '';
+                if (record.checkIn && record.checkOut) {
+                    const checkInTime = new Date(`${record.date}T${record.checkIn}`);
+                    const checkOutTime = new Date(`${record.date}T${record.checkOut}`);
+                    const diff = (checkOutTime - checkInTime) / (1000 * 60 * 60);
+                    duration = `${diff.toFixed(2)} h`;
+                }
+                
+                row.innerHTML = `
+                    <td class="px-4 py-2">${formatDate(record.date)}</td>
+                    <td class="px-4 py-2">${record.checkIn || '-'}</td>
+                    <td class="px-4 py-2">${record.checkOut || '-'}</td>
+                    <td class="px-4 py-2">${duration || '-'}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        
+        // Handle check in/out
+        function handleCheckInOut(type) {
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const time = now.toTimeString().split(' ')[0].substring(0, 5);
+            
+            let todayRecord = appData.attendance.find(a => 
+                a.employeeId === currentUser.id && a.date === today
+            );
+            
+            if (!todayRecord) {
+                todayRecord = {
+                    employeeId: currentUser.id,
+                    date: today,
+                    checkIn: null,
+                    checkOut: null
+                };
+                appData.attendance.push(todayRecord);
+            }
+            
+            if (type === 'in') {
+                if (todayRecord.checkIn) {
+                    showModal('Déjà pointé', '<p>Vous avez déjà pointé votre arrivée aujourd\'hui.</p>');
+                    return;
+                }
+                todayRecord.checkIn = time;
+                addActivity(currentUser.id, 'Arrivée', time);
+            } else {
+                if (!todayRecord.checkIn) {
+                    showModal('Erreur', '<p>Vous devez d\'abord pointer votre arrivée.</p>');
+                    return;
+                }
+                if (todayRecord.checkOut) {
+                    showModal('Déjà pointé', '<p>Vous avez déjà pointé votre départ aujourd\'hui.</p>');
+                    return;
+                }
+                todayRecord.checkOut = time;
+                addActivity(currentUser.id, 'Départ', time);
+            }
+            
+            saveData();
+            updateLastCheckStatus();
+            updateEmployeeAttendanceTable();
+            
+            showModal(
+                type === 'in' ? 'Arrivée enregistrée' : 'Départ enregistré',
+                `<p>Pointage enregistré à ${time}.</p>`
+            );
+        }
+        
+        // Add activity to recent activity log
+        function addActivity(employeeId, action, time) {
+            const employee = appData.employees.find(e => e.id === employeeId);
+            if (!employee) return;
+            
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            
+            appData.recentActivity.unshift({
+                employeeId,
+                employeeName: employee.name,
+                action,
+                time,
+                date: today
+            });
+            
+            // Keep only the most recent 50 activities
+            if (appData.recentActivity.length > 50) {
+                appData.recentActivity = appData.recentActivity.slice(0, 50);
+            }
+            
+            saveData();
+            
+            // Update UI if in admin view
+            if (isAdminView) {
+                updateRecentActivity();
+                updateStatistics();
+            }
+        }
+        
+        // Update recent activity table
+        function updateRecentActivity() {
+            const tableBody = document.getElementById('recent-activity-table');
+            tableBody.innerHTML = '';
+            
+            if (appData.recentActivity.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="3" class="px-4 py-2 text-center">Aucune activité récente</td>`;
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            const todayDate = new Date().toISOString().split('T')[0];
+            
+            appData.recentActivity
+                .filter(activity => activity.date === todayDate)
+                .slice(0, 10) // Show only the 10 most recent activities
+                .forEach(activity => {
+                    const row = document.createElement('tr');
+                    row.className = 'data-row border-b dark:border-gray-700';
+                    
+                    row.innerHTML = `
+                        <td class="px-4 py-2">${activity.employeeName} (${activity.employeeId})</td>
+                        <td class="px-4 py-2">${activity.action}</td>
+                        <td class="px-4 py-2">${activity.time}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+        }
+        
+        // Update employee table in admin view
+        function updateEmployeeTable() {
+            const tableBody = document.getElementById('employees-table');
+            tableBody.innerHTML = '';
+            
+            appData.employees.forEach(employee => {
+                const row = document.createElement('tr');
+                row.className = 'data-row border-b dark:border-gray-700';
+                
+                // Get current status
+                const today = new Date().toISOString().split('T')[0];
+                const todayAttendance = appData.attendance.find(a => 
+                    a.employeeId === employee.id && a.date === today
+                );
+                
+                let status = 'Absent';
+                let statusClass = 'text-red-600 dark:text-red-400';
+                
+                if (todayAttendance) {
+                    if (todayAttendance.checkIn && todayAttendance.checkOut) {
+                        status = 'Parti';
+                        statusClass = 'text-gray-600 dark:text-gray-400';
+                    } else if (todayAttendance.checkIn) {
+                        status = 'Présent';
+                        statusClass = 'text-green-600 dark:text-green-400';
+                    }
+                }
+                
+                row.innerHTML = `
+                    <td class="px-4 py-2">${employee.id}</td>
+                    <td class="px-4 py-2">${employee.name}</td>
+                    <td class="px-4 py-2">${employee.department}</td>
+                    <td class="px-4 py-2 ${statusClass}">${status}</td>
+                    <td class="px-4 py-2">
+                        <button class="text-blue-500 hover:text-blue-700 mr-2 view-employee" data-id="${employee.id}">
+                            Voir
+                        </button>
+                        <button class="text-red-500 hover:text-red-700 delete-employee" data-id="${employee.id}">
+                            Supprimer
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // Add event listeners to buttons
+            document.querySelectorAll('.view-employee').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const employeeId = e.target.dataset.id;
+                    viewEmployee(employeeId);
+                });
+            });
+            
+            document.querySelectorAll('.delete-employee').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const employeeId = e.target.dataset.id;
+                    deleteEmployee(employeeId);
+                });
+            });
+        }
+        
+        // Show add employee form
+        function showAddEmployeeForm() {
+            document.getElementById('add-employee-form').classList.remove('hidden');
+        }
+        
+        // Hide add employee form
+        function hideAddEmployeeForm() {
+            document.getElementById('add-employee-form').classList.add('hidden');
+            
+            // Clear form fields
+            document.getElementById('new-employee-id').value = '';
+            document.getElementById('new-employee-name').value = '';
+            document.getElementById('new-employee-department').value = '';
+            document.getElementById('new-employee-password').value = '';
+        }
+        
+        // Save new employee
+        function saveNewEmployee() {
+            const id = document.getElementById('new-employee-id').value;
+            const name = document.getElementById('new-employee-name').value;
+            const department = document.getElementById('new-employee-department').value;
+            const password = document.getElementById('new-employee-password').value;
+            
+            // Validate inputs
+            if (!id || !name || !department || !password) {
+                showModal('Erreur', '<p>Tous les champs sont obligatoires.</p>');
+                return;
+            }
+            
+            // Check if ID already exists
+            if (appData.employees.some(emp => emp.id === id)) {
+                showModal('Erreur', '<p>Cet identifiant existe déjà.</p>');
+                return;
+            }
+            
+            // Add new employee
+            appData.employees.push({
+                id,
+                name,
+                department,
+                password,
+                isAdmin: false
+            });
+            
+            saveData();
+            hideAddEmployeeForm();
+            updateEmployeeTable();
+            
+            showModal('Employé ajouté', `<p>L'employé ${name} a été ajouté avec succès.</p>`);
+        }
+        
+        // View employee details
+        function viewEmployee(employeeId) {
+            const employee = appData.employees.find(emp => emp.id === employeeId);
+            if (!employee) return;
+            
+            // Get attendance records for this employee
+            const attendance = appData.attendance
+                .filter(a => a.employeeId === employeeId)
+                .sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            // Prepare attendance HTML
+            let attendanceHTML = '';
+            if (attendance.length > 0) {
+                attendanceHTML = `
+                    <h4 class="font-bold mt-4 mb-2">Dernières présences</h4>
+                    <div class="overflow-x-auto max-h-[200px]">
+                        <table class="w-full table-auto">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="px-3 py-2 text-left text-sm">Date</th>
+                                    <th class="px-3 py-2 text-left text-sm">Arrivée</th>
+                                    <th class="px-3 py-2 text-left text-sm">Départ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                attendance.slice(0, 5).forEach(record => {
+                    attendanceHTML += `
+                        <tr class="border-b">
+                            <td class="px-3 py-2 text-sm">${formatDate(record.date)}</td>
+                            <td class="px-3 py-2 text-sm">${record.checkIn || '-'}</td>
+                            <td class="px-3 py-2 text-sm">${record.checkOut || '-'}</td>
+                        </tr>
+                    `;
+                });
+                
+                attendanceHTML += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else {
+                attendanceHTML = `<p class="mt-4 text-gray-500">Aucune donnée de présence</p>`;
+            }
+            
+            // Generate QR and barcode
+            const modalHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <h4 class="font-bold mb-2">Informations</h4>
+                        <p><span class="font-semibold">ID:</span> ${employee.id}</p>
+                        <p><span class="font-semibold">Nom:</span> ${employee.name}</p>
+                        <p><span class="font-semibold">Service:</span> ${employee.department}</p>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div id="modal-qrcode" class="mb-2 bg-white p-2 rounded"></div>
+                        <div id="modal-barcode-container" class="bg-white p-2 rounded">
+                            <svg id="modal-barcode"></svg>
+                        </div>
+                    </div>
+                </div>
+                ${attendanceHTML}
+            `;
+            
+            showModal(`Détails: ${employee.name}`, modalHTML);
+            
+            // Generate QR code in modal
+            QRCode.toCanvas(document.getElementById('modal-qrcode'), employee.id, { width: 150 }, function (error) {
+                if (error) console.error(error);
+            });
+            
+            // Generate barcode in modal
+            JsBarcode('#modal-barcode', employee.id, {
+                format: 'CODE128',
+                lineColor: '#000',
+                width: 2,
+                height: 40,
+                displayValue: true
+            });
+        }
+        
+        // Delete employee
+        function deleteEmployee(employeeId) {
+            // Prevent deleting the current user
+            if (employeeId === currentUser.id) {
+                showModal('Erreur', '<p>Vous ne pouvez pas supprimer votre propre compte.</p>');
+                return;
+            }
+            
+            const employee = appData.employees.find(emp => emp.id === employeeId);
+            if (!employee) return;
+            
+            showModal(
+                'Confirmer la suppression',
+                `<p>Êtes-vous sûr de vouloir supprimer l'employé "${employee.name}" ?</p>
+                <p class="text-red-500 mt-2">Cette action est irréversible.</p>
+                <div class="flex justify-end mt-4">
+                    <button id="confirm-delete" class="bg-red-500 text-white px-4 py-2 rounded-md">Supprimer</button>
+                </div>`
+            );
+            
+            document.getElementById('confirm-delete').addEventListener('click', () => {
+                // Remove employee
+                appData.employees = appData.employees.filter(emp => emp.id !== employeeId);
+                
+                // Remove associated attendance records
+                appData.attendance = appData.attendance.filter(a => a.employeeId !== employeeId);
+                
+                saveData();
+                updateEmployeeTable();
+                updateStatistics();
+                
+                closeModal();
+                showModal('Employé supprimé', `<p>L'employé a été supprimé avec succès.</p>`);
+            });
+        }
+        
+        // Start QR scanner
+        function startQRScanner() {
+            const scannerContainer = document.getElementById('qr-reader');
+            
+            document.getElementById('start-scan-btn').classList.add('hidden');
+            document.getElementById('stop-scan-btn').classList.remove('hidden');
+            
+            html5QrCode = new Html5Qrcode('qr-reader');
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            );
+        }
+        
+        // Stop QR scanner
+        function stopQRScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    document.getElementById('start-scan-btn').classList.remove('hidden');
+                    document.getElementById('stop-scan-btn').classList.add('hidden');
+                    document.getElementById('scan-result').classList.add('hidden');
+                }).catch(err => {
+                    console.error('Error stopping scanner:', err);
+                });
+            }
+        }
+        
+        // QR code scan success handler
+        function onScanSuccess(employeeId) {
+            // Find employee
+            const employee = appData.employees.find(emp => emp.id === employeeId);
+            
+            const scanResult = document.getElementById('scan-result');
+            
+            if (!employee) {
+                scanResult.innerHTML = `
+                    <div class="bg-red-100 dark:bg-red-900 border-l-4 border-red-500 text-red-700 dark:text-red-200 p-4">
+                        <p>Employé non trouvé: ${employeeId}</p>
+                    </div>
+                `;
+                scanResult.classList.remove('hidden');
+                return;
+            }
+            
+            // Handle attendance
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const time = now.toTimeString().split(' ')[0].substring(0, 5);
+            
+            let todayRecord = appData.attendance.find(a => 
+                a.employeeId === employeeId && a.date === today
+            );
+            
+            let action = '';
+            let bgColor = '';
+            
+            if (!todayRecord) {
+                // First check-in
+                todayRecord = {
+                    employeeId,
+                    date: today,
+                    checkIn: time,
+                    checkOut: null
+                };
+                appData.attendance.push(todayRecord);
+                action = 'Arrivée';
+                bgColor = 'bg-green-100 dark:bg-green-900 border-green-500 text-green-700 dark:text-green-200';
+                addActivity(employeeId, 'Arrivée', time);
+            } else if (!todayRecord.checkIn) {
+                // Check-in
+                todayRecord.checkIn = time;
+                action = 'Arrivée';
+                bgColor = 'bg-green-100 dark:bg-green-900 border-green-500 text-green-700 dark:text-green-200';
+                addActivity(employeeId, 'Arrivée', time);
+            } else if (!todayRecord.checkOut) {
+                // Check-out
+                todayRecord.checkOut = time;
+                action = 'Départ';
+                bgColor = 'bg-blue-100 dark:bg-blue-900 border-blue-500 text-blue-700 dark:text-blue-200';
+                addActivity(employeeId, 'Départ', time);
+            } else {
+                // Already checked in and out
+                scanResult.innerHTML = `
+                    <div class="bg-yellow-100 dark:bg-yellow-900 border-l-4 border-yellow-500 text-yellow-700 dark:text-yellow-200 p-4">
+                        <p>${employee.name} a déjà pointé son arrivée et son départ aujourd'hui.</p>
+                    </div>
+                `;
+                scanResult.classList.remove('hidden');
+                return;
+            }
+            
+            saveData();
+            updateEmployeeTable();
+            updateStatistics();
+            
+            scanResult.innerHTML = `
+                <div class="${bgColor} border-l-4 p-4">
+                    <p class="font-bold">${action} enregistrée</p>
+                    <p>${employee.name} (${employeeId})</p>
+                    <p>Heure: ${time}</p>
+                </div>
+            `;
+            scanResult.classList.remove('hidden');
+        }
+        
+        // QR code scan failure handler
+        function onScanFailure(error) {
+            // We can ignore failures
+            console.log('QR code scanning failure:', error);
+        }
+        
+        // Manual check in/out
+        function manualCheckInOut(type) {
+            const employeeId = document.getElementById('manual-employee-id').value;
+            if (!employeeId) {
+                showModal('Erreur', '<p>Veuillez entrer un ID d\'employé.</p>');
+                return;
+            }
+            
+            // Find employee
+            const employee = appData.employees.find(emp => emp.id === employeeId);
+            
+            if (!employee) {
+                showModal('Erreur', '<p>Employé non trouvé.</p>');
+                return;
+            }
+            
+            // Handle attendance
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const time = now.toTimeString().split(' ')[0].substring(0, 5);
+            
+            let todayRecord = appData.attendance.find(a => 
+                a.employeeId === employeeId && a.date === today
+            );
+            
+            if (!todayRecord) {
+                todayRecord = {
+                    employeeId,
+                    date: today,
+                    checkIn: null,
+                    checkOut: null
+                };
+                appData.attendance.push(todayRecord);
+            }
+            
+            if (type === 'in') {
+                if (todayRecord.checkIn) {
+                    showModal('Déjà pointé', `<p>${employee.name} a déjà pointé son arrivée aujourd'hui.</p>`);
+                    return;
+                }
+                todayRecord.checkIn = time;
+                addActivity(employeeId, 'Arrivée', time);
+            } else {
+                if (!todayRecord.checkIn) {
+                    showModal('Erreur', `<p>${employee.name} doit d'abord pointer son arrivée.</p>`);
+                    return;
+                }
+                if (todayRecord.checkOut) {
+                    showModal('Déjà pointé', `<p>${employee.name} a déjà pointé son départ aujourd'hui.</p>`);
+                    return;
+                }
+                todayRecord.checkOut = time;
+                addActivity(employeeId, 'Départ', time);
+            }
+            
+            saveData();
+            updateEmployeeTable();
+            updateStatistics();
+            
+            showModal(
+                type === 'in' ? 'Arrivée enregistrée' : 'Départ enregistré',
+                `<p>Pointage enregistré pour ${employee.name} à ${time}.</p>`
+            );
+            
+            // Clear input
+            document.getElementById('manual-employee-id').value = '';
+        }
+        
+        // Update statistics
+        function updateStatistics() {
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Get all employees (excluding admin accounts)
+            const totalEmployees = appData.employees.filter(emp => !emp.isAdmin).length;
+            
+            // Count present employees
+            const presentEmployees = appData.attendance.filter(a => 
+                a.date === today && a.checkIn && !a.checkOut
+            ).length;
+            
+            // Count employees who have left
+            const leftEmployees = appData.attendance.filter(a => 
+                a.date === today && a.checkIn && a.checkOut
+            ).length;
+            
+            // Calculate absent employees
+            const absentEmployees = totalEmployees - presentEmployees - leftEmployees;
+            
+            // Calculate attendance rate
+            const attendanceRate = totalEmployees > 0 
+                ? Math.round(((presentEmployees + leftEmployees) / totalEmployees) * 100) 
+                : 0;
+            
+            // Update UI
+            document.getElementById('present-count').textContent = presentEmployees;
+            document.getElementById('absent-count').textContent = absentEmployees;
+            document.getElementById('attendance-rate').textContent = `${attendanceRate}%`;
+        }
+        
+        // Render charts
+        function renderCharts() {
+            renderAttendanceChart();
+            renderDepartmentChart();
+            renderHoursChart();
+        }
+        
+        // Render attendance chart
+        function renderAttendanceChart() {
+            const ctx = document.getElementById('attendance-chart').getContext('2d');
+            
+            // Get last 7 days
+            const dates = [];
+            const attendanceRates = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                dates.push(formatDate(dateStr, true));
+                
+                // Calculate attendance rate for this day
+                const totalEmployees = appData.employees.filter(emp => !emp.isAdmin).length;
+                const presentEmployees = appData.attendance.filter(a => 
+                    a.date === dateStr && (a.checkIn || a.checkOut)
+                ).length;
+                
+                const rate = totalEmployees > 0 
+                    ? (presentEmployees / totalEmployees) * 100 
+                    : 0;
+                
+                attendanceRates.push(Math.round(rate));
+            }
+            
+            // Destroy previous chart if it exists
+            if (attendanceChart) {
+                attendanceChart.destroy();
+            }
+            
+            // Create new chart
+            attendanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Taux de présence (%)',
+                        data: attendanceRates,
+                        backgroundColor: 'rgba(93, 92, 222, 0.2)',
+                        borderColor: 'rgba(93, 92, 222, 1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Taux: ${context.parsed.y}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Render department chart
+        function renderDepartmentChart() {
+            const ctx = document.getElementById('department-chart').getContext('2d');
+            
+            // Get departments and count attendance
+            const departments = {};
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Count employees per department
+            appData.employees.forEach(emp => {
+                if (emp.isAdmin) return;
+                
+                if (!departments[emp.department]) {
+                    departments[emp.department] = {
+                        total: 0,
+                        present: 0
+                    };
+                }
+                
+                departments[emp.department].total++;
+                
+                // Check if employee is present today
+                const present = appData.attendance.some(a => 
+                    a.employeeId === emp.id && a.date === today && (a.checkIn || a.checkOut)
+                );
+                
+                if (present) {
+                    departments[emp.department].present++;
+                }
+            });
+            
+            // Prepare data for chart
+            const departmentNames = Object.keys(departments);
+            const presentCounts = departmentNames.map(dept => departments[dept].present);
+            const absentCounts = departmentNames.map(dept => departments[dept].total - departments[dept].present);
+            
+            // Destroy previous chart if it exists
+            if (departmentChart) {
+                departmentChart.destroy();
+            }
+            
+            // Create new chart
+            departmentChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: departmentNames,
+                    datasets: [
+                        {
+                            label: 'Présents',
+                            data: presentCounts,
+                            backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Absents',
+                            data: absentCounts,
+                            backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Render hours chart
+        function renderHoursChart() {
+            const ctx = document.getElementById('hours-chart').getContext('2d');
+            
+            // Calculate average hours per day for the last 7 days
+            const dates = [];
+            const avgHours = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                dates.push(formatDate(dateStr, true));
+                
+                // Get all complete attendance records for this day
+                const dayRecords = appData.attendance.filter(a => 
+                    a.date === dateStr && a.checkIn && a.checkOut
+                );
+                
+                // Calculate hours worked
+                let totalHours = 0;
+                
+                dayRecords.forEach(record => {
+                    const checkInTime = new Date(`${record.date}T${record.checkIn}`);
+                    const checkOutTime = new Date(`${record.date}T${record.checkOut}`);
+                    const diff = (checkOutTime - checkInTime) / (1000 * 60 * 60);
+                    totalHours += diff;
+                });
+                
+                const avg = dayRecords.length > 0 ? totalHours / dayRecords.length : 0;
+                avgHours.push(avg.toFixed(2));
+            }
+            
+            // Destroy previous chart if it exists
+            if (hoursChart) {
+                hoursChart.destroy();
+            }
+            
+            // Create new chart
+            hoursChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Moyenne d\'heures travaillées',
+                        data: avgHours,
+                        backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Moyenne: ${context.parsed.y} heures`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + ' h';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Export data
+        function exportData() {
+            const period = document.getElementById('export-month').value;
+            
+            showModal(
+                'Exporter les données',
+                `<p>Pour télécharger les données, veuillez utiliser la fonctionnalité "Capture d'écran" de votre navigateur ou faire un clic-droit sur les graphiques puis "Enregistrer l'image sous".</p>
+                <p class="mt-2">Pour une exportation plus complète, vous pouvez également contacter votre administrateur.</p>`
+            );
+        }
+        
+        // Show modal
+        function showModal(title, content) {
+            modalTitle.textContent = title;
+            modalBody.innerHTML = content;
+            modalBackdrop.classList.remove('hidden');
+        }
+        
+        // Close modal
+        function closeModal() {
+            modalBackdrop.classList.add('hidden');
+        }
+        
+        // Format date
+        function formatDate(dateString, short = false) {
+            const options = short 
+                ? { day: 'numeric', month: 'short' } 
+                : { year: 'numeric', month: 'long', day: 'numeric' };
+            
+            return new Date(dateString).toLocaleDateString('fr-FR', options);
+        }
+        
+        // Initialize the app
+        init();
+    </script>
+</body>
+</html>
